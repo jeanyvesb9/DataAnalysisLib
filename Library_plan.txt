@@ -1,0 +1,139 @@
+DataAnalysis-Lib
+
+func roundError:
+    Args:
+        error:
+    returns rounded error to 1st signifficant digit
+
+func roundToError:
+    Args:
+        x
+        error
+    returns x rounded to error
+
+func pprintDataFitSet:
+    Args:
+        list
+    prints a panda.DataFrame with all the fits. Assumes the same name for all params.
+
+class DataSet:
+    Properties:
+        x
+        y
+        xError
+        yError
+        name
+
+    __init__:
+        Args:
+            x
+            y
+            xError = None
+            xErrorFn = None
+            yError = None
+            yErrorFn = None
+            name = ''
+            xLabel = ''
+            yLabel = ''
+            xUnits = None
+            yUnits = None
+        if xErrorFn is not None, then if xError is not None calculate xError property. Otherwise throw warning.
+        if yErrorFn is not None, then if yError is not None calculate yError property. Otherwise throw warning.
+
+    cut:
+        Args:
+            initialIndex = None
+            finalIndex = None
+    purge:
+        Args:
+        step // step >= 1
+    remove:
+        Args:
+            index //can be int or list
+    indexAtX:
+        Args:
+            value
+            exact = True //if False, then return list with closest element
+        returns list
+    indexAtY:
+        Args:
+            value
+            exact = True //if False, then return list with closest element
+        returns list
+
+
+    getMean:
+        returns mean of y
+    getStdDev:
+        returns Standard Deviation of y
+    getStdDevOfMean:
+        returns Standard Deviation of the Mean of y, also calles Standard Error of the Mean, or simply Standard Error
+    getWeightedMean:
+        returns weighted mean
+    getWeightedMeanError:
+        returns weighted mean error
+
+    quickPlot:
+        Args:
+            plotType = PlotType.ErrorBar
+            step = 0
+        plots the dataset
+        returns fig, ax
+    
+    dataFrame:
+        Args:
+            rounded = True
+            xSeparatedError = False
+            xRelativeError = False
+            ySeparatedError = False
+            yRelativeError = False
+            saveCSVFile = None
+            csvSep = ','
+            csvDecimal = '.'
+        returns panda.DataFrame with the class data. If separatedErrors, put xError ans yError on separated columns
+        saves csv to saveFile if saveFile is not None
+
+class DataFit:
+    Properties:
+        data
+        fn
+        initialConditions
+        fitObj
+        paramsName
+
+    __init__:
+        Args:
+            data
+            fn
+            initialConditions
+            paramsName = []
+            method = 'odr'
+
+        TODO: check for initialConditions size
+    
+    getR2:
+        returns R-squared
+    getFitFn:
+        returns fn with params applied
+    dataFrame:
+        Args:
+            rounded = True
+        prints a panda.DataFrame with the fit data
+
+class PascoParser:
+    Properties:
+        csvFile
+    
+    __init__:
+        Args:
+            csv_file
+            separator
+            decimal
+            numberOfColumnsPerSeries
+    
+    parseDataSeries:
+        Args:
+            seriesNumber
+            xValue
+            yValue
+        returns (xvalues, yvalues)
