@@ -6,8 +6,8 @@ import scipy.odr as odr
 import matplotlib.pyplot as plt
 import pandas as pd
 
-import global_funcs
-import global_enums
+from . import global_funcs
+from . import global_enums
 
 
 class DataFit(object):

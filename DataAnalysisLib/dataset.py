@@ -4,8 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 
-import global_funcs
-import global_enums
+from . import global_funcs
+from . import global_enums
 
 class DataSet(object):
     def __init__(self, x, y, xError = None, xErrorFn = None, yError = None, yErrorFn = None, xLabel = 'x', yLabel = 'y', \
