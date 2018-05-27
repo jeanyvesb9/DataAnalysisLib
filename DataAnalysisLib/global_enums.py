@@ -1,11 +1,12 @@
-import enum
+import enum as _enum
 
-@enum.unique
-class PlotType(enum.Enum):
+@_enum.unique
+class PlotType(_enum.Enum):
     ErrorBar = 0
     Line = 1
     Point = 2
 
-@enum.unique
-class FitMethods(enum.Enum):
+@_enum.unique
+class FitMethods(_enum.Enum):
     ODR = 0
+    OLS = 1

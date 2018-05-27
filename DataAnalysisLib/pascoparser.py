@@ -1,56 +1,93 @@
-import warnings
+import warnings as _warnings
 
-import numpy as np
-import pandas as pd
+import numpy as _np
+import pandas as _pd
 
-from . import dataset
+from . import xydataset as _xyds
+from . import dataset as _ds
 
 class PascoParser(object):
     def __init__(self, csvFile, numberOfColumnsPerSeries, separator = ',', decimal = '.'):
-        self.data = pd.read_csv(csvFile, separator, decimal = decimal)
-        self.numberOfColumnsPerSeries = numberOfColumnsPerSeries
-        self.decimal = decimal
+        self._data = _pd.read_csv(csvFile, separator, decimal = decimal)
+        self._numberOfColumnsPerSeries = numberOfColumnsPerSeries
+        self._decimal = decimal
         
         numberOfSeries = int(len(self.data.columns)/numberOfColumnsPerSeries)
         
-        self.series = []
+        self._series = []
+        self._seriesNames = []
         for s in range(numberOfSeries):
-            df = pd.DataFrame(self.data[self.data.columns[s * self.numberOfColumnsPerSeries : (s + 1) * self.numberOfColumnsPerSeries]])
+            df = _pd.DataFrame(self.data[self.data.columns[s * self.numberOfColumnsPerSeries : (s + 1) * self.numberOfColumnsPerSeries]])
             df.columns = [df[colName][0] for colName in df.columns]
+            self._seriesNames += [self.data.columns[s*self.numberOfColumnsPerSeries]]
             df = df.drop(0)
             df.index = range(len(df.index))
             df = df.dropna(how = 'all')
-            self.series.append(df)
+            self._series += [df]
 
-    def getColumnsFromSeries(self, seriesNumber, xCol, yCol):
-        df = self.series[seriesNumber]
-        dftemp = pd.DataFrame(df[[df.columns[xCol], df.columns[yCol]]]).dropna()
-        xCol = dftemp[df.columns[xCol]]
-        yCol = dftemp[df.columns[yCol]]
-        return (np.array([s.replace(self.decimal, '.') for s in xCol], 'float64'), np.array([s.replace(self.decimal, '.') for s in yCol], 'float64'))
+    @property
+    def data(self):
+        return self._data
+    
+    @property
+    def numberOfColumnsPerSeries(self):
+        return self._numberOfColumnsPerSeries
+    
+    @property
+    def decimal(self):
+        return self._decimal
+    
+    @property
+    def series(self):
+        return self._series
+
+    @property
+    def seriesNames(self):
+        return self._seriesNames
 
     @staticmethod
     def parseColumnName(colName):
-        pIndex = colName.find('(')
+        pIndex = colName.rfind('(')
         if pIndex == -1:
             return colName, ''
         else:
             return colName[:pIndex - 1], colName[pIndex + 1 : -1]
 
-    def makeDataSet(self, seriesNumber, xCol, yCol, xError = None, yError = None, xErrorFn = None, yErrorFn = None, autoLabel = True, \
-                    xLabel = None, yLabel = None, xUnits = None, yUnits = None, name = ''):
-        x, y = self.getColumnsFromSeries(seriesNumber, xCol, yCol)
+    def getColumnDataset(self, seriesNumber, column, error = None, errorFn = None, autoLabel = True, name = None, units = None):
+        df = self.series[seriesNumber]
+        col = df[df.columns[column]].dropna()
 
         if autoLabel:
-            if xLabel is not None or yLabel is not None or xUnits is not None or yUnits is not None:
-                warnings.warn('autoLabel selected and manual label/units paramenters set. Defaulting to manual label parameters where available.')
+            if name is not None or units is not None:
+                _warnings.warn('autoLabel selected and manual name/units paramenters set. Defaulting to manual name parameters where available.')
             
-            xl, xu = self.parseColumnName(self.series[seriesNumber].columns[xCol])
-            yl, yu = self.parseColumnName(self.series[seriesNumber].columns[yCol])
+            n, u = self.parseColumnName(df.columns[column])
+            
+            name = n if name is None else name
+            units = u if units is None else units
+        
+        return _ds.Dataset(_np.array([s.replace(self.decimal, '.') if isinstance(s, str) else s for s in col], 'float64'), error, errorFn, name, units)
+
+    def getXYDataset(self, seriesNumber, xCol, yCol, xError = None, yError = None, xErrorFn = None, yErrorFn = None, autoLabel = True, \
+                    xLabel = None, yLabel = None, xUnits = None, yUnits = None, name = None):
+
+        df = self.series[seriesNumber]
+        col = df[[df.columns[xCol]] + [df.columns[yCol]]].dropna()
+        
+        if autoLabel:
+            if name is not None or xLabel is not None or yLabel is not None or xUnits is not None or yUnits is not None:
+                _warnings.warn('autoLabel selected and manual name/units paramenters set. Defaulting to manual name parameters where available.')
+            
+            xl, xu = self.parseColumnName(df.columns[xCol])
+            yl, yu = self.parseColumnName(df.columns[yCol])
             
             xLabel = xl if xLabel is None else xLabel
-            xUnits = xu if xUnits is None or xUnits == '' else xUnits
+            xUnits = xu if xUnits is None else xUnits
             yLabel = yl if yLabel is None else yLabel
-            yUnits = yu if yUnits is None or xUnits == '' else yUnits
+            yUnits = yu if yUnits is None else yUnits
+            name = self.seriesNames[seriesNumber] if name is None else name
 
-        return dataset.DataSet(x, y, xError, xErrorFn, yError, yErrorFn, xLabel, yLabel, xUnits, yUnits, name)
+        return _xyds.XYDataset(_np.array([s.replace(self.decimal, '.') if isinstance(s, str) else s for s in col[df.columns[xCol]]], 'float64'), \
+                                _np.array([s.replace(self.decimal, '.') if isinstance(s, str) else s for s in col[df.columns[yCol]]], 'float64'), \
+                                xError = xError, yError = yError, xErrorFn = xErrorFn, yErrorFn = yErrorFn, \
+                                xLabel = xLabel, yLabel = yLabel, xUnits = xUnits, yUnits = yUnits, name = name)
