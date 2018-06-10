@@ -1,4 +1,5 @@
 import warnings as _warnings
+import typing as _typing
 
 import numpy as _np
 import matplotlib.pyplot as _plt
@@ -10,16 +11,18 @@ from . import dataset as _ds
 
 
 class XYDataset(object):
-    def __init__(self, x, y, xError = None, xErrorFn = None, yError = None, yErrorFn = None, xLabel = None, yLabel = None, \
-                    xUnits = None, yUnits = None, name = None):
-
+    def __init__(self, x: _typing.Any, y: _typing.Any, xError: _typing.Any = None, xErrorFn: _typing.Callable[[float, float], float] = None, \
+                    yError: _typing.Any = None, yErrorFn: _typing.Callable[[float, float], float] = None, xLabel: str = None, yLabel: str = None, \
+                    xUnits: str = None, yUnits: str = None, name: str = None):
+        
         if isinstance(x, _ds.Dataset):
             self.xDataset = x
         else:
             x = _np.array(x)
             if x.ndim != 1:
                 _warnings.warn("Incorrect dimension of x.")
-            self.xDataset = _ds.Dataset(x, suppressWarnings = True)
+            else:
+                self.xDataset = _ds.Dataset(x)
 
         if isinstance(y, _ds.Dataset):
             self.yDataset = y
@@ -27,11 +30,12 @@ class XYDataset(object):
             y = _np.array(y)
             if y.ndim != 1:
                 _warnings.warn("Incorrect dimension of y.")
-            self.yDataset = _ds.Dataset(y, suppressWarnings = True)
+            else:
+                self.yDataset = _ds.Dataset(y)
 
-        if self.x.size != self.y.size:
-            sx = self.x.size
-            sy = self.y.size
+        if len(self.x) != len(self.y):
+            sx = len(self.x)
+            sy = len(self.y)
             d = _np.abs(sx - sy)
             diff = _np.zeros(d)
             if sx > sy:
@@ -46,7 +50,7 @@ class XYDataset(object):
         if xError is not None:
             if isinstance(xError, _np.ndarray) or isinstance(xError, list):
                 if xErrorFn is None:
-                    if xError.size != self.x.size:
+                    if len(xError) != len(self.x):
                         self.xError = None
                         _warnings.warn('len(xError) != len(x): Default error (None) selected.')
                     else:
@@ -64,7 +68,7 @@ class XYDataset(object):
         if yError is not None:
             if isinstance(yError, _np.ndarray) or isinstance(yError, list):
                 if yErrorFn is None:
-                    if yError.size != self.y.size:
+                    if len(yError) != len(self.y):
                         self.yError = None
                         _warnings.warn('len(yError) != len(y): Default error (None) selected.')
                     else:
@@ -89,7 +93,6 @@ class XYDataset(object):
         if self.yUnits is None:
             self.yUnits = yUnits #empty str checking done in setter
         self.name = name #None type checking done in setter
-
 
     @property
     def x(self):
@@ -122,81 +125,86 @@ class XYDataset(object):
     #Idiot proofing the library:
 
     @property
-    def xLabel(self):
+    def xLabel(self) -> str:
         return self.xDataset.name
     @xLabel.setter
-    def xLabel(self, value):
+    def xLabel(self, value: str):
         self.xDataset.name = value if value is not None and value != '' else 'x'
     
     @property
-    def yLabel(self):
+    def yLabel(self) -> str:
         return self.yDataset.name
     @yLabel.setter
-    def yLabel(self, value):
+    def yLabel(self, value: str):
         self.yDataset.name = value if value is not None and value != '' else 'y'
 
     @property
-    def xUnits(self):
+    def xUnits(self) -> str:
         return self.xDataset.units
     @xUnits.setter
-    def xUnits(self, value):
+    def xUnits(self, value: str):
         self.xDataset.units = value
 
     @property
-    def yUnits(self):
+    def yUnits(self) -> str:
         return self.yDataset.units
     @yUnits.setter
-    def yUnits(self, value):
+    def yUnits(self, value: str):
         self.yDataset.units = value
 
     @property
-    def name(self):
+    def name(self) -> str:
         return self._name
     @name.setter
-    def name(self, value):
+    def name(self, value: str):
         self._name = value if value is not None else ''
 
     #End of idiot proofing.
 
-    def prettyXLabel(self):
+    def prettyXLabel(self) -> str:
         return self.xDataset.prettyName()
 
-    def prettyYLabel(self):
+    def prettyYLabel(self) -> str:
         return self.yDataset.prettyName()
     
     
-    def cut(self, initialIndex = None, finalIndex = None):
+    def cut(self, initialIndex: int = None, finalIndex: int = None):
         self.xDataset.cut(initialIndex, finalIndex)
         self.yDataset.cut(initialIndex, finalIndex)
 
-    def purge(self, step): #step >= 1
+    def purge(self, step: int): #step >= 1
         self.xDataset.purge(step)
         self.yDataset.purge(step)
         
-    def remove(self, index):
+    def remove(self, index: int):
         self.xDataset.remove(index)
         self.yDataset.remove(index)
         
-    def indexAtX(self, value, exact = True):
+    def indexAtX(self, value: float, exact: bool = True) -> int:
         return self.xDataset.indexAtValue(value, exact)
     
-    def indexAtY(self, value, exact = True):
+    def indexAtY(self, value: float, exact: bool = True) -> int:
         return self.yDataset.indexAtValue(value, exact)
     
-    def quickPlot(self, plotType = _ge.PlotType.ErrorBar, purgeStep = 1, initialXIndex = None, finalXIndex = None):
-        if purgeStep <= 0:
-            _warnings.warn('purgeStep has to be at least 1. Setting purgeStep = 1.')
+    def quickPlot(self, plotType = _ge.PlotType.ErrorBar, purgeStep: int = 1, initialXIndex: int = None, finalXIndex: int = None):
+        
+        if isinstance(purgeStep, int):
+            if purgeStep not in range(1, len(self.x)):
+                _warnings.warn("purgeStep is out of range (1 <= purgeStep <= len(x)), setting purgeStep to 1")
+                purgeStep = 1
+        else:
+            _warnings.warn("purgeStep type is not int")
             purgeStep = 1
-
-        if initialXIndex is None:
+        
+        if not isinstance(initialXIndex, int):
             initialXIndex = 0
-        elif initialXIndex < 0 or initialXIndex >= len(self.x):
+        elif initialXIndex not in range(0, len(self.x)):
             _warnings.warn('initialXIndex given is out of range. Default value selected.')
             initialXIndex = 0
 
-        if finalXIndex is None:
+        if not isinstance(finalXIndex, int):
             finalXIndex = len(self.x)
-        elif finalXIndex < 0 or finalXIndex >= len(self.x):
+        elif finalXIndex not in range(0, len(self.x)):
             _warnings.warn('finalXIndex given is out of range. Default value selected.')
             finalXIndex = len(self.x)
         else:
@@ -219,8 +227,8 @@ class XYDataset(object):
 
         return fig, ax
     
-    def dataFrame(self, rounded = True, xSeparatedError = False, xRelativeError = False, ySeparatedError = False, \
-                yRelativeError = False, saveCSVFile = None, CSVSep = ',', CSVDecimal = '.'):
+    def dataFrame(self, rounded: bool = True, xSeparatedError: bool = False, xRelativeError: bool = False, ySeparatedError: bool = False, \
+                yRelativeError: bool = False, saveCSVFile: str = None, CSVSep: str = ',', CSVDecimal: str = '.'):
         xCol = _gf.createSeriesPanda(self.x, error = self.xError, label = self.xLabel, units = self.xUnits, relativeError = xRelativeError, \
                                     separated = xSeparatedError, rounded = rounded)
         yCol = _gf.createSeriesPanda(self.y, error = self.yError, label = self.yLabel, units = self.yUnits, relativeError = yRelativeError, \

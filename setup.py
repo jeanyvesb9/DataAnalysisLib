@@ -1,7 +1,7 @@
 import setuptools
 
 setuptools.setup(name='Data Analysis Lib',
-      version='2.0',
+      version='2.01',
       description='Open Source library developed for in-lab easy data analysis and processing. \
                     Intended for student use in experimental Physics labs.',
       url='https://github.com/jeanyvesb9/DataAnalysisLib',

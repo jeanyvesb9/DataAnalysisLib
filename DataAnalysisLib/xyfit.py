@@ -21,17 +21,21 @@ class XYFit(object):
         self._paramNames = None
         self._paramUnits = None
 
-        if initialXIndex is None:
+        if not isinstance(initialXIndex, int):
             self._initialXIndex = 0
-        elif initialXIndex < 0 or initialXIndex >= len(self.data.x):
+        elif initialXIndex not in range(0, len(self.data.x)):
             _warnings.warn('initialXIndex given is out of range. Default value selected.')
             self._initialXIndex = 0
+        else:
+            self._initialXIndex = initialXIndex
 
-        if finalXIndex is None:
-            self._finalXIndex = len(self.data.x) - 1
-        elif finalXIndex < 0 or finalXIndex >= len(self.data.x):
+        if not isinstance(finalXIndex, int):
+            self._finalXIndex = len(self.data.x)
+        elif finalXIndex not in range(0, len(self.data.x)):
             _warnings.warn('finalXIndex given is out of range. Default value selected.')
-            self._finalXIndex = len(self.data.x) - 1
+            self._finalXIndex = len(self.data.x)
+        else:
+            self._finalXIndex = finalXIndex + 1 #correct for python final list index offset
 
         self._fitObj = None
         self._fitParams = None
@@ -195,22 +199,29 @@ class XYFit(object):
         return _functools.partial(self.fn, self.fitParams)
     
     def quickPlot(self, plotType = _ge.PlotType.ErrorBar, purgeStep = 1, initialXIndex = None, finalXIndex = None):
-        if purgeStep <= 0:
-            _warnings.warn('purgeStep has to be at least 1. Setting purgeStep = 1.')
+        
+        if isinstance(purgeStep, int):
+            if purgeStep not in range(1, len(self.data.x)):
+                _warnings.warn("purgeStep is out of range (1 <= purgeStep <= len(x)), setting purgeStep to 1")
+                purgeStep = 1
+        else:
+            _warnings.warn("purgeStep type is not int")
             purgeStep = 1
-
-        if initialXIndex is None:
+        
+        if not isinstance(initialXIndex, int):
             initialXIndex = 0
-        elif initialXIndex < 0 or initialXIndex >= len(self.data.x):
+        elif initialXIndex not in range(0, len(self.data.x)):
             _warnings.warn('initialXIndex given is out of range. Default value selected.')
             initialXIndex = 0
 
-        if finalXIndex is None:
+        if not isinstance(finalXIndex, int):
             finalXIndex = len(self.data.x)
-        elif finalXIndex < 0 or finalXIndex >= len(self.data.x):
+        elif finalXIndex not in range(0, len(self.data.x)):
             _warnings.warn('finalXIndex given is out of range. Default value selected.')
             finalXIndex = len(self.data.x)
-
+        else:
+            finalXIndex += 1 #correct for python final list index offset
+        
         fig , ax = _plt.subplots(1,1)
 
         if plotType == _ge.PlotType.ErrorBar:
