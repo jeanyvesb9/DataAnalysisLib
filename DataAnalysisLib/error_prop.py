@@ -50,28 +50,30 @@ class errorProp(object):
     @data.setter
     def data(self, value = None):
         if isinstance(value, _ds.Dataset):
-            self._values = []
-            self._data.v, self._data.error = self._values[0], self._values[1]
+            values = []
+            values.append(self._data.v)
+            values.append(self._data.error)
         elif isinstance(value, list):
-            self._values = []
+            values = []
             for data in value:   # making big array with all dataset as columns, this form is convenient to evaluate error propagation
-                self._values[0] = _np.array([data.v if isinstance(data, _ds.Dataset) else None for data in value]).transpose()
-                self._values[1] = _np.array([data.error if isinstance(data, _ds.Dataset) else None for data in value]).transpose()
-            self._data = self._values
+                values.append(_np.array([data.v for data in value if isinstance(data, _ds.Dataset)]).transpose())
+                values.append(_np.array([data.error for data in value if isinstance(data, _ds.Dataset)]).transpose())
+            self._data = values
         else:
             self._data = None
             _warnings.warn("aa")
 
     
-    def run(self):
+    def run(self, params):
 
         self._eps = _np.sqrt(_np.finfo(float).eps) #setting machine eps
-        self._grad = np.array([_opt.approx_fprime(self._data[0][i,:]) for i in range(self._data[0].size)]).transpose()
-        self._prop = _np.sqrt(_np.sum(self._grad**2 * self._values[1]**2))
+        self._grad = _np.array([_opt.approx_fprime(self._data[0][i,:], self._fn, self._eps, *params) for i in range(self._data[0].size)]).transpose()
+        self._prop = _np.sqrt(_np.sum(self._grad**2 * self._data[1]**2))
         return self._prop
 
         
 
-
-error = errorProp(_ds.Dataset([1,2,3], [0.1, 0.2, 0.3]), lambda )
-error.run()
+data = _ds.Dataset([1,2,3], [0.1, 0.2, 0.3])
+print(data.v)
+error = errorProp(_ds.Dataset([1,2,3], [0.1, 0.2, 0.3]), lambda B,x: B[0]*x[0] + B[1]*x[1])
+error.run([0,1])
