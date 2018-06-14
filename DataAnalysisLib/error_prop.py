@@ -18,11 +18,10 @@ from scipy import optimize as _opt
 class errorProp(object):
 
 
-    def __init__(self, data, fn, values):
+    def __init__(self, data, fn):
         
         self._data = data
         self._fn = fn 
-        self._values = values
     
     @property
     def data(self):
@@ -31,10 +30,6 @@ class errorProp(object):
     @property 
     def fn(self):
         return self._fn
-
-    @property
-    def values(self):
-        return self._values
 
     @fn.setter
     def fn(self, func):
@@ -55,36 +50,28 @@ class errorProp(object):
     @data.setter
     def data(self, value = None):
         if isinstance(value, _ds.Dataset):
-            self._data = value
+            self._values = []
+            self._data.v, self._data.error = self._values[0], self._values[1]
         elif isinstance(value, list):
-            value = []
+            self._values = []
             for data in value:   # making big array with all dataset as columns, this form is convenient to evaluate error propagation
-                value[0] = _np.array([_ds.Dataset(data).v if not isinstance(data, _ds.Dataset) else data.v for data in value]).transpose()
-                value[1] = _np.array([_ds.Dataset(data).error if not isinstance(data, _ds.Dataset) else data.error for data in value]).transpose()
-            self._data = value
+                self._values[0] = _np.array([data.v if isinstance(data, _ds.Dataset) else None for data in value]).transpose()
+                self._values[1] = _np.array([data.error if isinstance(data, _ds.Dataset) else None for data in value]).transpose()
+            self._data = self._values
         else:
             self._data = None
             _warnings.warn("aa")
 
     
-    @values.setter
-    def values(self, vals = None):
-        if vals is not None:
-            if isinstance(vals, list):
-                self._values = vals
-            else:
-                self._values = [vals]
-        else:
-            self._values = vals
-            _warnings.warn(" Values are nontype setting to default")
-
-
     def run(self):
 
         self._eps = _np.sqrt(_np.finfo(float).eps) #setting machine eps
-        self._prop = _np.sqrt(_np.sum(_np.dot(self._values[0]**2, self._values[1]**2), axis = 1))
+        self._grad = np.array([_opt.approx_fprime(self._data[0][i,:]) for i in range(self._data[0].size)]).transpose()
+        self._prop = _np.sqrt(_np.sum(self._grad**2 * self._values[1]**2))
         return self._prop
 
         
 
 
+error = errorProp(_ds.Dataset([1,2,3], [0.1, 0.2, 0.3]), lambda )
+error.run()
