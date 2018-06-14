@@ -7,13 +7,15 @@ import numpy as _np
 import matplotlib.pyplot as _plt
 import pandas as _pd
 
-from . import global_funcs as _gf
-from . import global_enums as _ge
-from . import dataset as _ds
+import global_funcs as _gf
+import global_enums as _ge
+import dataset as _ds
+from scipy import optimize as _opt
 
 
 
-class errorProp(_ds.Dataset):
+
+class errorProp(object):
 
 
     def __init__(self, data, fn, values):
@@ -22,21 +24,6 @@ class errorProp(_ds.Dataset):
         self._fn = fn 
         self._values = values
     
-    # Avoiding inconsistency from inherited object, we want to inherit all Dataset properties, but
-    # we'll mask the attributes that refer to errors
-
-    #-------------------------------------------------------------------------------------------------------
-
-    @property
-    def error(self):
-        raise AttributeError
-    
-    @property
-    def errorFn(self):
-        raise AttributeError
-    
-    #--------------------------------------------------------------------------------------------------------
-
     @property
     def data(self):
         return self._data
@@ -52,14 +39,17 @@ class errorProp(_ds.Dataset):
     @fn.setter
     def fn(self, func):
         if hasattr(func, '__call__'): # checking  if is a function (checking if is callable, only way around duck typing)
-            if len(_inspect.getfullargspec(func).args) == len(self.data):  # checking that the function has the same numbers of arguments as datasets
+            args = _inspect.getfullargspec(func).args  
+            var_args, coef_vars = args[0], args[1] if len(args) == 2 else None
+            if isinstance(var_args, list) and isinstance(coef_vars, list):
                 self._fn = func
+                self._var_args, self._coef_args = var_args, coef_vars
             else:
                 self._fn = None
-                _warnings.warn(" #args of function does not match numbers of datasets, settings to None")
+                _warnings.warn("Variables and coefficients must be lists")
         else:
             self._fn = None
-            _warnings.warn(" function is not callable")
+            _warnings.warn(" func must be callable")
 
 
     @data.setter
@@ -67,8 +57,10 @@ class errorProp(_ds.Dataset):
         if isinstance(value, _ds.Dataset):
             self._data = value
         elif isinstance(value, list):
-            for data in value:
-                value = [_ds.Dataset(data) if not isinstance(data, _ds.Dataset) else data]
+            value = []
+            for data in value:   # making big array with all dataset as columns, this form is convenient to evaluate error propagation
+                value[0] = _np.array([_ds.Dataset(data).v if not isinstance(data, _ds.Dataset) else data.v for data in value]).transpose()
+                value[1] = _np.array([_ds.Dataset(data).error if not isinstance(data, _ds.Dataset) else data.error for data in value]).transpose()
             self._data = value
         else:
             self._data = None
@@ -89,9 +81,10 @@ class errorProp(_ds.Dataset):
 
     def run(self):
 
-        val_max = max(self._values) # setting bounds for computing gradient
-        val_min = min(self._values)    
-        test_data = _np.arange(val_max, val_min)
+        self._eps = _np.sqrt(_np.finfo(float).eps) #setting machine eps
+        self._prop = _np.sqrt(_np.sum(_np.dot(self._values[0]**2, self._values[1]**2), axis = 1))
+        return self._prop
+
         
-        
-        
+
+

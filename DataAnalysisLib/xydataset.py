@@ -4,10 +4,9 @@ import typing as _typing
 import numpy as _np
 import matplotlib.pyplot as _plt
 import pandas as _pd
-
-from . import global_funcs as _gf
-from . import global_enums as _ge
-from . import dataset as _ds
+import global_funcs as _gf
+import global_enums as _ge
+import dataset as _ds
 
 
 class XYDataset(object):

@@ -6,8 +6,8 @@ import scipy.odr as _odr
 import matplotlib.pyplot as _plt
 import pandas as _pd
 
-from . import global_funcs as _gf
-from . import global_enums as _ge
+import global_funcs as _gf
+import global_enums as _ge
 
 
 class XYFit(object):

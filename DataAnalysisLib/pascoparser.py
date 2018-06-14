@@ -3,8 +3,8 @@ import warnings as _warnings
 import numpy as _np
 import pandas as _pd
 
-from . import xydataset as _xyds
-from . import dataset as _ds
+import xydataset as _xyds
+import dataset as _ds
 
 class PascoParser(object):
     def __init__(self, csvFile, numberOfColumnsPerSeries, separator = ',', decimal = '.'):
