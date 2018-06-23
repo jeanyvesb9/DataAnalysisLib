@@ -1,5 +1,7 @@
 import warnings as _warnings
 import typing as _typing
+from scipy import optimize as _opt
+import inspect as _inspect
 
 import numpy as _np
 import matplotlib.pyplot as _plt
@@ -135,3 +137,23 @@ class Dataset(object):
             table.to_csv(saveCSVFile, sep = CSVSep, decimal = CSVDecimal)
         
         return table
+
+
+    def errorProp(self, fn = None, fnPrime = None) -> _np.ndarray:
+
+        if fnPrime is not None and hasattr(fnPrime, '__call__'):
+            prop = fnPrime(self.v)*self.error
+        elif fnPrime is None:
+            
+            # numerical derivation
+
+            if fn is not None and hasattr(fn, '__call__'): #testing if it a function
+
+                eps = _np.sqrt(_np.finfo(float).eps) # machine epsilon
+
+                args = _inspect.getfullargspec(fn).args  
+                coef_args, vars_args = args[0], args[1] if len(args) == 2 else None and _warnings.warn(' incorrect format on fn')
+                prime = _opt.approx_fprime(self.v, fn, [eps, _np.sqrt(200) * eps], *coef_args)
+                prop = _np.sqrt(_np.sum((prime**2)*(self.error)**2))
+
+        return prop
