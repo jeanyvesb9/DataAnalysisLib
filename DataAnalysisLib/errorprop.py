@@ -17,17 +17,17 @@ class ErrorProp:
         if isinstance(data, _ds.Dataset):
             self.__data = data
         elif isinstance(data, list):
-            self.__data = []
+            self.__data = {}
             for ds in data:
                 if isinstance(ds, _ds.Dataset) == False:
                    raise Warning
-                self.__data.append(ds)
+                self.__data[ds.name] = ds     #appending to dict datasets and name (explicty required for propagation)
 
         if isinstance(func, str): # getting the expression in the right form
             self.__func = _sp.sympify(func)
-        elif isinstance(func, _sp.core.expr.Expr):
+        elif isinstance(func, _sp.expr.Expr):
             self.__func = func
-        self.__func = None
+        
          
         self.__eps = eps
         self.__tree = []
@@ -47,7 +47,10 @@ class ErrorProp:
     
     def __buildProp(self, variables):
         diffs = [_sp.diff(self.__func, symb) for symb in self.__variables]
-        return diffs
+        tmp = diffs[0]**2
+        for diff, deltas in zip(diffs, self.__errorSymbs):
+            tmp = _sp.Add(tmp, _sp.MatMul(diff**2, deltas**2))
+        return (tmp - diffs[0]**2)**(1/2)     # propagation assuming no correlations between errors
         
             
     @property
@@ -65,5 +68,24 @@ class ErrorProp:
     @property
     def propExpr(self):
         return self.__propExpr
+    @property
+    def deltas(self):
+        return self.__errorSymbs
+    
+    """
+    def run(self):
+        # check if the names of dataset equals the variables from the function expression
+        # use sets so we can ignore the order of the list builded from the dict keys
+        
+        Prop = []
+        
+        if not set(self.__variables) == set(list(self.__data.keys())):
+            for var in list(self.__data.keys()):
+                for idx in range(self.__data[var].v.size):
+                    Prop.append(_sp.substitution([(var, self.__data[var].v[idx])]))
+                    
+        
+        return Prop
 
 
+    """

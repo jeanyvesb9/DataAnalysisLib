@@ -121,7 +121,7 @@ class XYDataset(object):
     def yError(self, value):
         self.yDataset.error = value
 
-    #Idiot proofing the library:
+    
 
     @property
     def xLabel(self) -> str:
@@ -158,7 +158,7 @@ class XYDataset(object):
     def name(self, value: str):
         self._name = value if value is not None else ''
 
-    #End of idiot proofing.
+   
 
     def prettyXLabel(self) -> str:
         return self.xDataset.prettyName()
