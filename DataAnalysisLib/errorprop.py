@@ -86,6 +86,8 @@ class ErrorProp:
                     
         
         return Prop
+        
+        En realidad deberia tirar una lista de datasets, pero como vas a implementar el multi, implementalo mejor con esa clase
 
 
     """
