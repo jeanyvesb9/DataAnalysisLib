@@ -4,84 +4,42 @@ import typing as _typing
 import numpy as _np
 import matplotlib.pyplot as _plt
 import pandas as _pd
-import global_funcs as _gf
-import global_enums as _ge
-import dataset as _ds
+from . import global_funcs as _gf
+from . import global_enums as _ge
+from . import dataset as _ds
+from . import multidataset as _mds
 
 
-class XYDataset(object):
-    def __init__(self, x: _typing.Any, y: _typing.Any, xError: _typing.Any = None, xErrorFn: _typing.Callable[[float, float], float] = None, \
-                    yError: _typing.Any = None, yErrorFn: _typing.Callable[[float, float], float] = None, xLabel: str = None, yLabel: str = None, \
-                    xUnits: str = None, yUnits: str = None, name: str = None):
+class XYDataset(_mds.MultiDataset):
+    def __init__(self, x: _typing.Any, y: _typing.Any, xError: _typing.Any = None, xErrorFn: _typing.Callable[[float], float] = None, \
+                    yError: _typing.Any = None, yErrorFn: _typing.Callable[[float], float] = None, covMatrix: _typing.Any = None, \
+                    autoGenCov: bool = False, xLabel: str = None, yLabel: str = None, xUnits: str = None, yUnits: str = None, name: str = None):
         
-        if isinstance(x, _ds.Dataset):
-            self.xDataset = x
-        else:
-            x = _np.array(x)
-            if x.ndim != 1:
-                _warnings.warn("Incorrect dimension of x.")
-            else:
-                self.xDataset = _ds.Dataset(x)
+        xDataset = self._formatInitialDatasets(x, name = 'x')
+        yDataset = self._formatInitialDatasets(y, name = 'y')
 
-        if isinstance(y, _ds.Dataset):
-            self.yDataset = y
-        else:
-            y = _np.array(y)
-            if y.ndim != 1:
-                _warnings.warn("Incorrect dimension of y.")
-            else:
-                self.yDataset = _ds.Dataset(y)
-
-        if len(self.x) != len(self.y):
-            sx = len(self.x)
-            sy = len(self.y)
+        if len(xDataset) != len(yDataset):
+            sx, sy = len(xDataset), len(yDataset)
             d = _np.abs(sx - sy)
             diff = _np.zeros(d)
             if sx > sy:
-                self.y = _np.concatenate(self.y, diff)
-                self.yError = None
+                yDataset.data = _np.concatenate(yDataset.data, diff)
+                yDataset.error = None
                 _warnings.warn('len(x) > len(y): y has been filled with zeros to match sizes. yError has been set to None.')
             else:
-                self.x = _np.concatenate(self.x, diff)
-                self.xError = None
+                xDataset.data = _np.concatenate(xDataset.data, diff)
+                xDataset.error = None
                 _warnings.warn('len(y) > len(x): x has been filled with zeros to match sizes. xError has been set to None.')
 
-        if xError is not None:
-            if isinstance(xError, _np.ndarray) or isinstance(xError, list):
-                if xErrorFn is None:
-                    if len(xError) != len(self.x):
-                        self.xError = None
-                        _warnings.warn('len(xError) != len(x): Default error (None) selected.')
-                    else:
-                        self.xError = xError
-                else:
-                    self.xError = None
-                    _warnings.warn('xError overdefined: explicit and functional definition of xError given. Default error (zeros) selected.')
-            else:
-                self.xError = _np.ones(len(self.x)) * xError
-        elif xErrorFn is not None:
-            self.xError = xErrorFn(self.x, self.y)
-        #Else, if x was initially a Dataset, use the xErrors already in x (if not removed due to len(x) != len(y).
-        #Otherwise, use None (default value selected when self.xDataset was created)
-            
-        if yError is not None:
-            if isinstance(yError, _np.ndarray) or isinstance(yError, list):
-                if yErrorFn is None:
-                    if len(yError) != len(self.y):
-                        self.yError = None
-                        _warnings.warn('len(yError) != len(y): Default error (None) selected.')
-                    else:
-                        self.yError = yError
-                else:
-                    self.yError = None
-                    _warnings.warn('yError overdefined: explicit and functional definition of yError given. Default error (None) selected.')
-            else:
-                self.yError = _np.ones(len(self.y)) * yError
-        elif yErrorFn is not None:
-            self.yError = yErrorFn(self.x, self.y)
-        #Else, if y was initially a Dataset, use the yErrors already in y (if not removed due to len(x) != len(y).
-        #Otherwise, use None (default value selected when self.yDataset was created)
-        
+        xDataset = self._computeInitialError(xDataset, xError, xErrorFn, name = 'x')
+        yDataset = self._computeInitialError(yDataset, yError, yErrorFn, name = 'y')
+
+        if covMatrix is not None and (xError is not None or xErrorFn is not None or \
+                                        yError is not None or yErrorFn is not None):
+            raise Exception('Both covMatrix and an error scalar/list/function were provided. Use only one.')
+
+        _mds.MultiDataset.__init__(self, [xDataset, yDataset], name = name, covMatrix = covMatrix, autoGenCov = autoGenCov)
+
         #Check for already set labels and units in original x, y Dataset (if provided).
         if self.xLabel == _ds.DEFAULT_DATASET_NAME:
             self.xLabel = xLabel #empty and None type checking in setter
@@ -93,19 +51,63 @@ class XYDataset(object):
             self.yUnits = yUnits #empty str checking done in setter
         self.name = name #None type checking done in setter
 
+    def _formatInitialDatasets(self, data: _typing.Any, name: str):
+        if isinstance(data, _ds.Dataset):
+            return data
+        else:
+            data = _gf._conv(data)
+            if data.ndim != 1:
+                raise Exception("Incorrect dimension of '" + name + "'.")
+            else:
+                return _ds.Dataset(data)
+
+    def _computeInitialError(self, dataset: _ds.Dataset, error: _typing.Any, errorFn: _typing.Callable[[float], float], name: str) -> _ds.Dataset:
+        if error is not None:
+            if isinstance(error, _np.ndarray) or isinstance(error, list):
+                if errorFn is None:
+                    if len(error) != len(dataset):
+                        dataset.error = None
+                        _warnings.warn('len(' + name + 'Error) != len(' + name + '): Default error (None) selected.')
+                    else:
+                        dataset.error = error
+                else:
+                    raise Exception(name + 'Error overdefined: explicit and functional definition of ' + name + 'Error given. Use only one.')
+            else:
+                dataset.error = _np.ones(len(dataset)) * error
+        elif errorFn is not None:
+            dataset.error = errorFn(dataset.data)
+        #Else, if 'dataset' was initially a Dataset, use the errors already in it.
+        #Otherwise, use None (default value selected when dataset was created)
+        return dataset
+
+
+    @property
+    def xDataset(self) -> _ds.Dataset:
+        return self.datasets[0]
+    @xDataset.setter
+    def xDataset(self, ds: _ds.Dataset):
+        self.datasets[0] = ds
+
+    @property
+    def yDataset(self) -> _ds.Dataset:
+        return self.datasets[1]
+    @yDataset.setter
+    def yDataset(self, ds: _ds.Dataset):
+        self.datasets[1] = ds
+
     @property
     def x(self):
-        return self.xDataset.v
+        return self.xDataset.data
     @x.setter
     def x(self, value):
-        self.xDataset.v = value
+        self.xDataset.data = value
 
     @property
     def y(self):
-        return self.yDataset.v
+        return self.yDataset.data
     @y.setter
     def y(self, value):
-        self.yDataset.v = value
+        self.yDataset.data = value
     
     @property
     def xError(self):
@@ -152,64 +154,64 @@ class XYDataset(object):
         self.yDataset.units = value
 
     @property
-    def name(self) -> str:
-        return self._name
-    @name.setter
-    def name(self, value: str):
-        self._name = value if value is not None else ''
-
-   
-
     def prettyXLabel(self) -> str:
         return self.xDataset.prettyName()
 
+    @property
     def prettyYLabel(self) -> str:
         return self.yDataset.prettyName()
-    
-    
-    def cut(self, initialIndex: int = None, finalIndex: int = None):
-        self.xDataset.cut(initialIndex, finalIndex)
-        self.yDataset.cut(initialIndex, finalIndex)
 
-    def purge(self, step: int): #step >= 1
-        self.xDataset.purge(step)
-        self.yDataset.purge(step)
-        
-    def remove(self, index: int):
-        self.xDataset.remove(index)
-        self.yDataset.remove(index)
-        
     def indexAtX(self, value: float, exact: bool = True) -> int:
         return self.xDataset.indexAtValue(value, exact)
     
     def indexAtY(self, value: float, exact: bool = True) -> int:
         return self.yDataset.indexAtValue(value, exact)
     
+    def insert(self, index: int, x: _typing.Any = None, y: _typing.Any = None, \
+                xError: _typing.Any = None, yError: _typing.Any = None, \
+                data: _typing.Any = None, error: _typing.Any = None, covMatrix: _typing.Any = None):
+                
+                if ((x is not None or y is not None) and data is not None) or \
+                    ((xError is not None or yError is not None) and error is not None):
+                    raise ValueError('Multiple definitions of data and error were given. Use only one.')
+                if data is None:
+                    if x is None or y is None:
+                        raise TypeError("Values for 'x' and 'y' are needed.") 
+                    data = [x, y]
+                if error is None:
+                    if xError is not None or yError is not None:
+                        error = [xError, yError]
+                _mds.MultiDataset.insert(self, index, data, error, covMatrix)
+
+    def sortByX(self, reversed: bool = False, indexList: _typing.Any = None):
+        self.sortByDataset(0, reversed = reversed, indexList = indexList)
+    
+    def sortByY(self, reversed: bool = False, indexList: _typing.Any = None):
+        self.sortByDataset(1, reversed = reversed, indexList = indexList)
+
     def quickPlot(self, plotType = _ge.PlotType.ErrorBar, purgeStep: int = 1, initialXIndex: int = None, finalXIndex: int = None):
         
         if isinstance(purgeStep, int):
-            if purgeStep not in range(1, len(self.x)):
-                _warnings.warn("purgeStep is out of range (1 <= purgeStep <= len(x)), setting purgeStep to 1")
-                purgeStep = 1
+            if purgeStep not in range(1, len(self)):
+                raise ValueError("purgeStep is out of range (1 <= purgeStep <= len(x)).")
         else:
-            _warnings.warn("purgeStep type is not int")
-            purgeStep = 1
+            raise TypeError("purgeStep type is not int")
         
-        if not isinstance(initialXIndex, int):
+        if initialXIndex is None:
             initialXIndex = 0
-        elif initialXIndex not in range(0, len(self.x)):
+        elif initialXIndex not in range(0, len(self)):
             _warnings.warn('initialXIndex given is out of range. Default value selected.')
             initialXIndex = 0
 
-        if not isinstance(finalXIndex, int):
+        if finalXIndex is None:
             finalXIndex = len(self.x)
-        elif finalXIndex not in range(0, len(self.x)):
+        elif finalXIndex not in range(0, len(self)):
             _warnings.warn('finalXIndex given is out of range. Default value selected.')
-            finalXIndex = len(self.x)
+            finalXIndex = len(self)
         else:
             finalXIndex += 1 #correct for python final list index offset
         
-        fig , ax = _plt.subplots(1,1)
+        fig, ax = _plt.subplots(1,1)
 
         if plotType == _ge.PlotType.ErrorBar:
             ax.errorbar(self.x[initialXIndex:finalXIndex:purgeStep], self.y[initialXIndex:finalXIndex:purgeStep], \
@@ -219,23 +221,21 @@ class XYDataset(object):
             ax.plot(self.x[initialXIndex:finalXIndex:purgeStep], self.y[initialXIndex:finalXIndex:purgeStep], '-')
         elif plotType == _ge.PlotType.Point:
             ax.plot(self.x[initialXIndex:finalXIndex:purgeStep], self.y[initialXIndex:finalXIndex:purgeStep], 's')
+        else:
+            raise ValueError("'plotType' chosen not available.")
 
-        ax.set_xlabel(self.prettyXLabel())
-        ax.set_ylabel(self.prettyYLabel())
+        ax.set_xlabel(self.prettyXLabel)
+        ax.set_ylabel(self.prettyYLabel)
         ax.set_title(self.name)
 
         return fig, ax
     
-    def dataFrame(self, rounded: bool = True, xSeparatedError: bool = False, xRelativeError: bool = False, ySeparatedError: bool = False, \
-                yRelativeError: bool = False, saveCSVFile: str = None, CSVSep: str = ',', CSVDecimal: str = '.'):
-        xCol = _gf.createSeriesPanda(self.x, error = self.xError, label = self.xLabel, units = self.xUnits, relativeError = xRelativeError, \
-                                    separated = xSeparatedError, rounded = rounded)
-        yCol = _gf.createSeriesPanda(self.y, error = self.yError, label = self.yLabel, units = self.yUnits, relativeError = yRelativeError, \
-                                    separated = ySeparatedError, rounded = rounded)
-        
-        table = _pd.concat([xCol, yCol], axis = 1, join = 'inner')
-        
-        if saveCSVFile is not None:
-            table.to_csv(saveCSVFile, sep = CSVSep, decimal = CSVDecimal)
-        
-        return table
+    def dataFrame(self, rounded: bool=True, signifficantDigits=1, \
+                    xSeparatedError: bool=False, xRelativeError: bool = False, \
+                    ySeparatedError: bool=False, yRelativeError: bool=False, \
+                    saveCSVFile: str=None, CSVSep: str=',', CSVDecimal: str='.'):
+
+        return _mds.MultiDataset.dataFrame(self, rounded=rounded, signifficantDigits=signifficantDigits,\
+                                    separatedErrors=[xSeparatedError, ySeparatedError], \
+                                    relativeErrors=[xRelativeError, yRelativeError], \
+                                    saveCSVFile=saveCSVFile, CSVSep=CSVSep, CSVDecimal=CSVDecimal)

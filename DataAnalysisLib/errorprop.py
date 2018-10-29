@@ -5,9 +5,9 @@ import sympy as _sp
 import numpy as _np
 import matplotlib.pyplot as _plt
 
-import dataset as _ds
-import global_funcs as _gf
-import global_enums as _ge
+from . import dataset as _ds
+from . import global_funcs as _gf
+from . import global_enums as _ge
 
 
 class ErrorProp:

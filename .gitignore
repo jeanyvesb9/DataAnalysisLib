@@ -1,5 +1,11 @@
-/build/
+build/
 
-/.vscode/
+.vscode/
 
-/Data_Analysis_Lib.egg-info/
+Data_Analysis_Lib.egg-info/
+
+__pycache__/
+
+dist/
+
+DataAnalysisLib/__pycache__/

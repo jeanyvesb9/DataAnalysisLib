@@ -2,6 +2,7 @@ import math as _math
 
 import numpy as _np
 import pandas as _pd
+import re as _re
 
 
 def cleanText(t):
@@ -13,27 +14,18 @@ def findNearestValueIndex(array, value):
     #returns index of nearest element to value in array
     return (_np.abs(_np.asarray(array) - value)).argmin()
 
-def roundToFirstSignifficantDigit(value):
-    #returns error rounded to first signifficant digit
-    return round(value, -int(_math.floor(_math.log10(abs(value))))) if value != 0 else 0
-
-def roundToError(value, error):
-    #returns value rounded to error's first signifficant digit
-    s = _np.array(list(str('{0:.1000f}').format(abs(error))))
-    if error == 0:
-        return value
-    elif s[0] == '0':
-        d = _np.where(s[2:] != '0')[0][0]
-        return round(value, d + 1)
-    else:
-        error = int(error)
-        digits = int(_math.log10(error))+1
-        return round(int(value), -(digits))
+def getSignifficantDigitLocation(value, signifficantDigits=1):
+    if signifficantDigits < 1:
+        raise ValueError("'numberOfSignifficantDigits' has to be a positive integer.")
+    v = -int(_np.floor(_np.log10(abs(value)))) if value != 0 else 0
+    v = v + (signifficantDigits - 1)
+    return v
 
 def latexValuePM(value, error):
     return str(value) + ' $\\pm$ ' + str(error)
 
-def createSeriesPanda(values, error = None, label = '$x$', units = None, relativeError = False, separated = False, rounded = True):
+def createSeriesPanda(values, error=None, label='$x$', units=None, relativeError=False, \
+                        separated=False, rounded=True, signifficantDigits=1):
     #Returns a panda DataFrame with values and error, formatted according to function params 
     pLabel = label + ' (' + units + ')' if units is not None else label
     pErrorLabel = '$\\Delta$ ' + pLabel
@@ -42,8 +34,9 @@ def createSeriesPanda(values, error = None, label = '$x$', units = None, relativ
         return _pd.DataFrame(values, columns = [pLabel])
     else:
         col = None
-        perrors = [roundToFirstSignifficantDigit(x) for x in error] if rounded else error
-        pvalues = [roundToError(values[i], perrors[i]) for i in range(len(values))] if rounded else values
+        sigDigits = [getSignifficantDigitLocation(x, signifficantDigits) for x in error]
+        perrors = [round(x, s) for x, s in zip(error, sigDigits)] if rounded else error
+        pvalues = [round(x, s) for x, s in zip(values, sigDigits)] if rounded else values
         if separated:
             col = _pd.DataFrame({pLabel: pvalues, pErrorLabel: perrors}, columns = [pLabel, pErrorLabel])
         else:
@@ -56,8 +49,43 @@ def createSeriesPanda(values, error = None, label = '$x$', units = None, relativ
         else:
             return col
 
-def R2(x, y, fn):
-    average = _np.average(y)
-    SSres = _np.sum(_np.array([(y[i] - fn(x[i]))**2 for i in range(len(x))]))
-    SStot = _np.sum(_np.array([(point - average)**2 for point in y]))
-    return 1 - SSres / SStot
+def _conv(obj, dtype=None):
+    #Converts obj to a numpy array if possible (obj is not None and is not a scalar)
+    if obj is None:
+        return obj
+    else:
+        if dtype is None:
+            obj = _np.asarray(obj)
+        else:
+            obj = _np.asarray(obj, dtype)
+            
+        if obj.shape == ():
+            # Scalar.
+            return obj.dtype.type(obj)
+        else:
+            return obj
+
+def tabulateStrBlock(s, times=1):
+    l = [m.start() for m in _re.finditer('\t', s)]
+    for index in reversed(l):
+        s = s[:index] + '\t' + s[index:]
+    s = '\t' + s
+    return s if times == 1 else tabulateStrBlock(s, times - 1)
+
+
+def covListToODRPACKcovList(covList):
+    if len(covList.shape) != 3:
+        raise ValueError("'covList' is not an 'ndarray' of shape (p, p, n).")
+    n = covList.shape[0]
+    p = covList.shape[1]
+
+    c = _np.zeros(shape=(p, p, n))
+
+    for i in range(n):
+        for j in range(p):
+            for k in range(p):
+                c[k, j, i] = covList[i, j, k]
+    
+    return c
+
+    
