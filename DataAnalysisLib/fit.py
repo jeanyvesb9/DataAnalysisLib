@@ -53,7 +53,8 @@ class Parameter(object):
             self._label = value
         else:
             raise TypeError('label has to be of type str or None.')
-            
+
+    @property
     def prettyLabel(self):
         return self.label + (' (' + self.units + ')' if self.units is not None else '')
     
@@ -226,14 +227,14 @@ class Fit(object):
         self._R2 = self._R2Compute()
         
     def _R2Compute(self):
-        y = self.multiDataset.datasets[self.dependentDatasetIndex]
+        y = self.multiDataset.datasets[self.dependentDatasetIndex].data[self.initialIndex:self.finalIndex]
         average = _np.average(y)
-        
+    
         setsX = []
         for i in range(len(y)):
             d = {}
             for varName, dsIndex in self.independentVars.items():
-                d[varName] = self.multiDataset.datasets[dsIndex][i]
+                d[varName] = self.multiDataset.datasets[dsIndex].data[i]
             setsX += [d]
             
         #The following line raises an error in pylint. The code is ok though
@@ -246,7 +247,7 @@ class Fit(object):
         self._fitOutput = self._fitObj.restart(iter = iterations)
         self._updateAfterFit()
         
-    def dataFrame(self, rounded=True, signifficantDigits=1, separatedError=False, relativeError=False, \
+    def dataFrame(self, rounded=True, signifficantDigits=2, separatedError=False, relativeError=False, \
                   transpose=False, saveCSVFile=None, CSVSep=',', CSVDecimal='.'):
         
         R2col = [_np.round(self.R2, 5)]
@@ -264,7 +265,7 @@ class Fit(object):
         R2col += ['-', '-']
         reducedChi2col += ['-', '-']
         
-        colNames = [param.label for param in self.parameters.values()] + ['$R^2$', '$\\chi^2_{red}$']
+        colNames = [param.prettyLabel for param in self.parameters.values()] + ['$R^2$', '$\\chi^2_{red}$']
         
         tblCols = {}
 
@@ -285,16 +286,16 @@ class Fit(object):
             if relativeError:
                 tblCols[colName] += [error/value if value != 0 and error is not None else '-']
             
-            tblCols[colName] += [param.initialValue]
+            tblCols[colName] += [param.initialValue, param.fixed]
         
         tblCols['$R^2$'] = R2col
         tblCols['$\\chi^2_{red}$'] = reducedChi2col
-        
-        table = _pd.DataFrame(tblCols, columns = colNames, index = rowNames)
+
+        table = _pd.DataFrame(tblCols, columns=colNames, index=rowNames)
         table = table.T if transpose else table
         
         if saveCSVFile is not None:
-            table.to_csv(saveCSVFile, sep = CSVSep, decimal = CSVDecimal)
+            table.to_csv(saveCSVFile, sep=CSVSep, decimal=CSVDecimal)
         
         return table
 
@@ -302,11 +303,12 @@ class Fit(object):
 
 
 class FitGenerator(object):
-    def __init__(self, fn, dependentDatasetIndex: int, independentVars: _typing.Any = [], \
-                 maxIterations: int = 50, name = None, fitType = _ge.FitMethods.ODR, \
-                 useIndVarErrors = True, useDepVarErrors = True, \
-                 labels: _typing.Dict[str, str] = {}, units: _typing.Dict[str, str] = {}, \
-                 fixed: _typing.Dict[str, bool] = {}):
+    def __init__(self, fn, dependentDatasetIndex: int, independentVars: _typing.Any=[], \
+                 maxIterations: int=50, name=None, fitType=_ge.FitMethods.ODR, \
+                 useIndVarErrors=True, useDepVarErrors=True, \
+                 useCovMatrices=False,
+                 labels: _typing.Dict[str, str]={}, units: _typing.Dict[str, str]={}, \
+                 fixed: _typing.Dict[str, bool]={}):
         
         '''
         independentVars can be:
@@ -334,6 +336,7 @@ class FitGenerator(object):
         self.fitType = fitType
         self.useIndVarErrors = useIndVarErrors
         self.useDepVarErrors = useDepVarErrors
+        self.useCovMatrices = useCovMatrices
         
         sig = _inspect.signature(fn)
         self.parameters = _collections.OrderedDict()
@@ -415,7 +418,7 @@ class FitGenerator(object):
         self._name = value if value is not None else ''
     
     def fit(self, multiDataset, maxIterations=None, fitType=None, useIndVarErrors=None, useDepVarErrors=None, \
-            initialIndex=None, finalIndex=None, **kwargs) -> Fit:
+            useCovMatrices=None, initialIndex=None, finalIndex=None, **kwargs) -> Fit:
         parameters = _copy.deepcopy(self.parameters)
 
         if maxIterations is None:
@@ -430,6 +433,8 @@ class FitGenerator(object):
             useIndVarErrors = self.useIndVarErrors
         if useDepVarErrors is None:
             useDepVarErrors = self.useDepVarErrors
+        if useCovMatrices is None:
+            useCovMatrices = self.useCovMatrices
                     
         for key, value in kwargs.items():
             if key not in parameters:
@@ -464,11 +469,12 @@ class FitGenerator(object):
         else:
             finalIndex += 1 #Correct for Python final list index offset
 
-        Xdsets = multiDataset.datasets[list(self.independentVars.values())]
+        Xdsets = [multiDataset.datasets[index] for index in self.independentVars.values()]
+        
         Ydset = multiDataset.datasets[self.dependentDatasetIndex]
 
         XValues = [ds.data[initialIndex:finalIndex] for ds in Xdsets]
-        YValues = Ydset.data[initialIndex, finalIndex]
+        YValues = Ydset.data[initialIndex:finalIndex]
         
         def _generateFitFunction(fn, X, params):
             def ret(beta, x):
@@ -481,12 +487,13 @@ class FitGenerator(object):
                     else:
                         args[name] = beta[i]
                         i += 1
-                
-                for i, xName in enumerate(X.keys()):
-                    args[xName] = x[i]
+                if len(X) == 1:
+                    args[list(X.keys())[0]] = x
+                else:
+                    for i, xName in enumerate(X.keys()):
+                        args[xName] = x[i]
 
-                #The following line raises an error in pylint. The code is ok though
-                self.fn(**args)
+                return fn(**args)
             
             return ret
         
@@ -496,37 +503,58 @@ class FitGenerator(object):
             model = _odr.Model(fn)
             covX = None
             if useIndVarErrors:
-                if multiDataset.covMatrix is None:
-                    _warnings.warn("No covMatrix provided for 'multiDataset'. Attempting to create covMatrices from datasets errors.", RuntimeWarning)
-                    multiDataset.generateCovMatricesFromErrors()
-
                 totalColumns = range(0, multiDataset.shape[1])
                 independentColumns = list(self.independentVars.values())
-                toDelete = list(set(totalColumns) - set(independentColumns))
-                toDelete = sorted(toDelete)[::-1]
-                covX = []
-                for mat in multiDataset.covMatrices[initialIndex:finalIndex]:
-                    for elem in toDelete:
-                        mat = _np.delete(mat, elem, axis=0)
-                        mat = _np.delete(mat, elem, axis=1)
-                    covX += [mat]
-                    
-                covX = np.array(covX)
+                if useCovMatrices:
+                    if multiDataset.covMatrices is None:
+                        raise Exception("No covMatrix provided for 'multiDataset'. For dataset errors only set 'useCovMatrix=False'.")
+                    toDelete = list(set(totalColumns) - set(independentColumns))
+                    toDelete = sorted(toDelete)[::-1]
+                    covX = []
+                    for mat in multiDataset.covMatrices[initialIndex:finalIndex]:
+                        for elem in toDelete:
+                            mat = _np.delete(mat, elem, axis=0)
+                            mat = _np.delete(mat, elem, axis=1)
+                        covX += [mat]
+                        
+                    covX = _np.array(covX)
 
-                for covMatrix in covX:
-                    diag = _np.diag(covMatrix)
-                    if _np.count_nonzero(diag) != len(diag):
-                        raise Exception("Some covMatrices have zeros in the diagonal. Cannot execute fitting with 'useIndVarErrors' == True.")
+                    for covMatrix in covX:
+                        diag = _np.diag(covMatrix)
+                        if _np.count_nonzero(diag) != len(diag):
+                            raise Exception("Some covMatrices have zeros in the diagonal. Cannot execute fitting with 'useIndVarErrors' == True.")
+                else:
+                    for dataset in Xdsets:
+                        if dataset.error is None:
+                            raise Exception("One or more independent variables have no errors specified.")
+                    
+                    covXShape = (finalIndex - initialIndex, len(independentColumns), len(independentColumns)) #(n, p, p)
+                    covX = _np.zeros(shape = covXShape)
+                    for i, m in zip(range(initialIndex, finalIndex), covX):
+                        for j in range(covXShape[1]):
+                            error = Xdsets[j].error[i]
+                            if error == 0:
+                                raise Exception("Some independent variable errors are zero. Cannot execute fitting with 'useIndVarErrors' == True.")
+                            m[j][j] = error
             
-            covX = _gf.covListToODRPACKcovList(covX)
+                covX = _gf.covListToODRPACKcovList(covX)
 
             sY = None
             if useDepVarErrors:
-                if Ydset.error is None:
-                    raise Exception("No errors provided for the dependent variable. Cannot execute fitting with 'useDepVarErrors' == True.")
-                sY = Ydset.error[initialIndex:finalIndex]
-                if _np.count_nonzero(sY) != len(sY):
-                    raise Exception("Some errors on the dependent variable are zero. Cannot execute fitting with 'useDepVarErrors' == True.")
+                if useCovMatrices:
+                    if multiDataset.covMatrices is None:
+                        raise Exception("No covMatrix provided for 'multiDataset'. For dataset errors only set 'useCovMatrix=False'.")
+                    
+                    sY = _np.array([mat[self.dependentDatasetIndex][self.dependentDatasetIndex] \
+                                    for mat in multiDataset.covMatrices[initialIndex:finalIndex]])
+                    if _np.count_nonzero(sY) != len(sY):
+                        raise Exception("Some covMatrices have zeros in the diagonal. Cannot execute fitting with 'useDepVarErrors' == True.")
+                else:
+                    if Ydset.error is None:
+                        raise Exception("No errors provided for the dependent variable. Cannot execute fitting with 'useDepVarErrors' == True.")
+                    sY = Ydset.error[initialIndex:finalIndex]
+                    if _np.count_nonzero(sY) != len(sY):
+                        raise Exception("Some errors on the dependent variable are zero. Cannot execute fitting with 'useDepVarErrors' == True.")
             
             data = _odr.RealData(XValues, YValues, covx=covX if useIndVarErrors else None, \
                                    sy=sY if useDepVarErrors else None)
@@ -544,12 +572,22 @@ class FitGenerator(object):
             model = _odr.Model(fn)
             sY = None
             if useDepVarErrors:
-                if Ydset.error is None:
-                    raise Exception("No errors provided for the dependent variable. Cannot execute fitting with 'useDepVarErrors' == True.")
-                sY = Ydset.error[initialIndex:finalIndex]
-                if _np.count_nonzero(sY) != len(sY):
-                    raise Exception("Some errors on the dependent variable are zero. Cannot execute fitting with 'useDepVarErrors' == True.")
+                if useCovMatrices:
+                    if multiDataset.covMatrices is None:
+                        raise Exception("No covMatrix provided for 'multiDataset'. For dataset errors only set 'useCovMatrix=False'.")
+                    
+                    sY = _np.array([mat[self.dependentDatasetIndex][self.dependentDatasetIndex] \
+                                    for mat in multiDataset.covMatrices[initialIndex:finalIndex]])
+                    if _np.count_nonzero(sY) != len(sY):
+                        raise Exception("Some covMatrices have zeros in the diagonal. Cannot execute fitting with 'useDepVarErrors' == True.")
+                else:
+                    if Ydset.error is None:
+                        raise Exception("No errors provided for the dependent variable. Cannot execute fitting with 'useDepVarErrors' == True.")
+                    sY = Ydset.error[initialIndex:finalIndex]
+                    if _np.count_nonzero(sY) != len(sY):
+                        raise Exception("Some errors on the dependent variable are zero. Cannot execute fitting with 'useDepVarErrors' == True.")
             
+
             data = _odr.RealData(XValues, YValues, sy=sY if useDepVarErrors else None)
             beta0 = [param.initialValue for param in parameters.values() if not param.fixed]
             
@@ -586,7 +624,7 @@ class FitGenerator(object):
 #-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 #External functions:
 
-def reportManyFits(fitList, fitNames=None, rounded=True, signifficantDigits=1, \
+def reportManyFits(fitList, fitNames=None, rounded=True, signifficantDigits=2, \
                     separatedError=False, relativeError=False, \
                     saveCSVFile=None, CSVSep=',', CSVDecimal='.'):
 
@@ -613,7 +651,7 @@ def reportManyFits(fitList, fitNames=None, rounded=True, signifficantDigits=1, \
             columns += [fitNames[index]]
         
         for param in fit.parameters.values():
-            value = param.valu
+            value = param.value
             error = param.error
 
             if rounded and error is not None:

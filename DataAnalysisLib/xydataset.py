@@ -4,11 +4,12 @@ import typing as _typing
 import numpy as _np
 import matplotlib.pyplot as _plt
 import pandas as _pd
+
 from . import global_funcs as _gf
 from . import global_enums as _ge
 from . import dataset as _ds
 from . import multidataset as _mds
-
+from . import xyfit as _xyfit
 
 class XYDataset(_mds.MultiDataset):
     def __init__(self, x: _typing.Any, y: _typing.Any, xError: _typing.Any = None, xErrorFn: _typing.Callable[[float], float] = None, \
@@ -155,11 +156,11 @@ class XYDataset(_mds.MultiDataset):
 
     @property
     def prettyXLabel(self) -> str:
-        return self.xDataset.prettyName()
+        return self.xDataset.prettyName
 
     @property
     def prettyYLabel(self) -> str:
-        return self.yDataset.prettyName()
+        return self.yDataset.prettyName
 
     def indexAtX(self, value: float, exact: bool = True) -> int:
         return self.xDataset.indexAtValue(value, exact)
@@ -188,6 +189,30 @@ class XYDataset(_mds.MultiDataset):
     
     def sortByY(self, reversed: bool = False, indexList: _typing.Any = None):
         self.sortByDataset(1, reversed = reversed, indexList = indexList)
+
+    def quickFit(self, fn, independentVar: _typing.Any='', \
+                 maxIterations: int=50, name=None, fitType=_ge.FitMethods.ODR, \
+                 useIndVarErrors=True, useDepVarErrors=True, \
+                 useCovMatrices=False, \
+                 labels: _typing.Dict[str, str]={}, units: _typing.Dict[str, str]={}, \
+                 fixed: _typing.Dict[str, bool]={}, **kwargs):
+        
+        if not useCovMatrices:
+            if useIndVarErrors and self.xError is None:
+                _warnings.warn("Independent variable (x) has no errors specified. Executing fit with 'useIndVarErrors=False", RuntimeWarning)
+                useIndVarErrors = False
+            if useDepVarErrors and self.yError is None:
+                _warnings.warn("Dependent variable (y) has no errors specified. Executing fit with 'useDepVarErrors=False", RuntimeWarning)
+                useDepVarErrors = False
+
+        XYFitGen = _xyfit.XYFitGenerator(fn, independentVar=independentVar, \
+                                         maxIterations=maxIterations, name=name, fitType=fitType, \
+                                         useIndVarErrors=useIndVarErrors, useDepVarErrors=useDepVarErrors, \
+                                         useCovMatrices=useCovMatrices, \
+                                         labels=labels, units=units, \
+                                         fixed=fixed)
+
+        return XYFitGen.fit(self, **kwargs)
 
     def quickPlot(self, plotType = _ge.PlotType.ErrorBar, purgeStep: int = 1, initialXIndex: int = None, finalXIndex: int = None):
         

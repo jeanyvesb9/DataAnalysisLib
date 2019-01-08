@@ -12,7 +12,7 @@ from . import dataset as _ds
 class MultiDataset(object):
     def __init__(self, datasets: [_ds.Dataset], name: str = None, covMatrix: _typing.Any = None, autoGenCov: bool = False):
         
-        self.datasets = _np.array(datasets)
+        self.datasets = datasets
 
         for dataset in self.datasets:
             if len(dataset) != len(self):

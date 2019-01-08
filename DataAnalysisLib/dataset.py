@@ -60,6 +60,7 @@ class Dataset(object):
     
     #End of idiot proofing.
 
+    @property
     def prettyName(self) -> str:
         return self.name if self.units is None else self.name + ' (' + self.units + ')'
 
@@ -167,12 +168,12 @@ class Dataset(object):
     
     def quickHistogram(self, bins: int = 'auto', range: _typing.Tuple[float, float] = None, normalized: bool = False):
         _plt.hist(self.data, bins, range = range, density = normalized)
-        _plt.xlabel(self.prettyName())
+        _plt.xlabel(self.prettyName)
         _plt.ylabel('Probability' if normalized else 'Counts')
         _plt.grid(True)
         _plt.show()
     
-    def dataFrame(self, rounded: bool=True, signifficantDigits=1, separatedError: bool=False, relativeError: bool=False, \
+    def dataFrame(self, rounded: bool=True, signifficantDigits=2, separatedError: bool=False, relativeError: bool=False, \
                     saveCSVFile: str=None, CSVSep: str=',', CSVDecimal: str='.'):
         table = _gf.createSeriesPanda(self.data, error = self.error, label = self.name, units = self.units, relativeError = relativeError, \
                                     separated = separatedError, rounded = rounded, signifficantDigits=signifficantDigits)

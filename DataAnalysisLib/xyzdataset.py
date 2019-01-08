@@ -9,6 +9,7 @@ from . import global_enums as _ge
 from . import dataset as _ds
 from . import multidataset as _mds
 from . import xydataset as _xyds
+from . import xyzfit as _xyzfit
 
 
 class XYZDataset(_xyds.XYDataset):
@@ -90,7 +91,7 @@ class XYZDataset(_xyds.XYDataset):
 
     @property
     def prettyZLabel(self) -> str:
-        return self.zDataset.prettyName()
+        return self.zDataset.prettyName
 
     def indexAtZ(self, value: float, exact: bool = True) -> int:
         return self.zDataset.indexAtValue(value, exact)
@@ -116,6 +117,30 @@ class XYZDataset(_xyds.XYDataset):
     
     def sortByZ(self, reversed: bool = False, indexList: _typing.Any = None):
         self.sortByDataset(2, reversed = reversed, indexList = indexList)
+
+    def quickFit(self, fn, independentVar: _typing.Any = '', \
+                 maxIterations: int = 50, name = None, fitType = _ge.FitMethods.ODR, \
+                 useIndVarErrors = True, useDepVarErrors = True, \
+                 useCovMatrices=False, \
+                 labels: _typing.Dict[str, str] = {}, units: _typing.Dict[str, str] = {}, \
+                 fixed: _typing.Dict[str, bool] = {}, **kwargs):
+
+        if not useCovMatrices:
+            if useIndVarErrors and (self.xError is None or self.yError is None):
+                _warnings.warn("One of the independent variables (x, y) have no errors specified. Executing fit with 'useIndVarErrors=False", RuntimeWarning)
+                useIndVarErrors = False
+            if useDepVarErrors and self.yError is None:
+                _warnings.warn("Dependent variable (z) has no errors specified. Executing fit with 'useDepVarErrors=False", RuntimeWarning)
+                useDepVarErrors = False
+
+        XYZFitGen = _xyzfit.XYZFitGenerator(fn, independentVar=independentVar, \
+                                         maxIterations=maxIterations, name=name, fitType=fitType, \
+                                         useIndVarErrors=useIndVarErrors, useDepVarErrors=useDepVarErrors, \
+                                         useCovMatrices=useCovMatrices, \
+                                         labels=labels, units=units, \
+                                         fixed=fixed)
+
+        return XYZFitGen.fit(self, **kwargs)
 
     def quickPlot(self, plotType=_ge.PlotType.Point, zMin: float=None, zMax: float=None):
         fig = _plt.figure()

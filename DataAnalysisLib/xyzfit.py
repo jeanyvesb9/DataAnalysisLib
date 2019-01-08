@@ -1,5 +1,6 @@
 import warnings as _warnings
 import functools as _functools
+import typing as _typing
 
 import numpy as _np
 import scipy.odr as _odr
@@ -67,4 +68,23 @@ class XYZFit(_fit.Fit):
 
 
 class XYZFitGenerator(_fit.FitGenerator):
-    _fitClass = XYZFit
+    def __init__(self, fn, independentVar: _typing.Any = '', \
+                 maxIterations: int = 50, name = None, fitType = _ge.FitMethods.ODR, \
+                 useIndVarErrors = True, useDepVarErrors = True, \
+                 useCovMatrices=False, \
+                 labels: _typing.Dict[str, str] = {}, units: _typing.Dict[str, str] = {}, \
+                 fixed: _typing.Dict[str, bool] = {}):
+        
+        self._fitClass = XYZFit
+        if type(independentVar) == str:
+            if independentVar == '':
+                independentVar = []
+            else:
+                independentVar = [independentVar]
+        
+        _fit.FitGenerator.__init__(self, fn, dependentDatasetIndex=2, independentVars=independentVar, \
+                                   maxIterations=maxIterations, name=name, fitType=fitType, \
+                                   useIndVarErrors=useIndVarErrors, useDepVarErrors=useDepVarErrors, \
+                                   useCovMatrices=useCovMatrices, \
+                                   labels=labels, units=units, \
+                                   fixed=fixed)
