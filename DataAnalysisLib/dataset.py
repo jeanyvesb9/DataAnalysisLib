@@ -1,13 +1,14 @@
 import warnings as _warnings
 import typing as _typing
-from scipy import optimize as _opt
 import inspect as _inspect
 import collections as _collections
 import numbers as _numbers
+import copy as _copy
 
 import numpy as _np
 import matplotlib.pyplot as _plt
 import pandas as _pd
+
 
 from . import global_funcs as _gf
 from . import global_enums as _ge
@@ -35,9 +36,11 @@ class Dataset(object):
                 self.error = _np.ones(len(self)) * error
         else:
             if errorFn is not None:
+                self.errorFn = errorFn
                 self.error = errorFn(self.data)
             else:
                 self.error = None
+                self.errorFn = None
         
         self.name = name #None type checking in setter
         self.units = units #empty and None type checking in setter
@@ -167,6 +170,7 @@ class Dataset(object):
         return 1/_np.sqrt(_np.sum(weights**2))
     
     def quickHistogram(self, bins: int = 'auto', range: _typing.Tuple[float, float] = None, normalized: bool = False):
+        
         _plt.hist(self.data, bins, range = range, density = normalized)
         _plt.xlabel(self.prettyName)
         _plt.ylabel('Probability' if normalized else 'Counts')
@@ -175,6 +179,7 @@ class Dataset(object):
     
     def dataFrame(self, rounded: bool=True, signifficantDigits=2, separatedError: bool=False, relativeError: bool=False, \
                     saveCSVFile: str=None, CSVSep: str=',', CSVDecimal: str='.'):
+        
         table = _gf.createSeriesPanda(self.data, error = self.error, label = self.name, units = self.units, relativeError = relativeError, \
                                     separated = separatedError, rounded = rounded, signifficantDigits=signifficantDigits)
         
@@ -185,13 +190,88 @@ class Dataset(object):
 
     def __len__(self):
         return len(self.data)
-
-    def __getitem__(self, index):
-        if not isinstance(index, int):
+    
+    
+    def __add__(self, other):
+        
+        # safe checks
+        
+        if not isinstance(other, Dataset):
             raise TypeError()
+        if len(self) != len(other):
+            raise ValueError()
+        if self.units != other.units:
+            raise ValueError()
+            
+        new_ds = Dataset(data = self.data + other.data)
+        new_ds.error = _np.sqrt(self.error**2 + other.error**2) #assuming uncorrelated datasets
+        new_ds.units = self.units 
         
-        if not index in range(len(self)):
-            raise IndexError()
-        
-        return (self.data[index], self.error[index] if self.error is not None else None)
    
+        return new_ds
+    
+    
+    def __mul__(self, other):
+        
+        # safe checks
+        
+        if not isinstance(other, Dataset):
+            raise TypeError()
+        if len(self) != len(other):
+            raise ValueError()
+            
+        new_ds = Dataset(data = self.data*other.data)
+        new_ds.error = _np.sqrt((self.data*other.error)**2 + (other.data*self.error)**2)
+        new_ds.units = self.units + "*"  + other.units
+        
+        return new_ds
+    
+    
+    def __truediv__(self, other):
+        
+        # safe checks
+        
+        if not isinstance(other, Dataset):
+            raise TypeError()
+        if len(self) != len(other):
+            raise ValueError()
+        for val in other.data:
+            if val == 0:
+                raise ValueError()
+        
+        new_ds = Dataset(data = self.data / other.data)
+        new_ds.error = _np.sqrt((self.error/other.data)**2 + (other.error*self.data/(-other.data)**2)**2)
+        new_ds.units = self.units + "/" + other.units
+        
+        return new_ds
+    
+    def __getitem__(self, index):
+        
+        # safe checks
+        
+        if not ( isinstance(index, int) or isinstance(index, list)):
+            raise TypeError()
+            
+        if isinstance(index, int):
+            if not index in range(len(self)):
+                raise IndexError()
+            
+            new_ds = _copy.deepcopy(self)
+            new_ds.data = self.data[index]
+            new_ds.error = self.error[index] if self.error is not None else None
+            
+            return new_ds
+       
+        if isinstance(index, list):
+            # checking so we can make a slice out of this list
+            
+            if len(index) not in [2,3]:
+                raise TypeError()
+        
+            new_slice = slice(*index)
+            new_ds = _copy.deepcopy(self)
+            new_ds.data = self.data[new_slice]
+            new_ds.error = self.error[new_slice] if self.error is not None else None 
+            
+            return new_ds
+             
