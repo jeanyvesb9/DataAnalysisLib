@@ -13,14 +13,15 @@ class MultiDataset(object):
     def __init__(self, datasets: [_ds.Dataset], name: str = None, covMatrix: _typing.Any = None, autoGenCov: bool = False):
         
         self.datasets = datasets
+        self.__autoGenCov = autoGenCov
 
         for dataset in self.datasets:
             if len(dataset) != len(self):
                 raise ValueError('Datasets provided have different lengths.')
 
-        if covMatrix is not None and autoGenCov:
+        if covMatrix is not None and self.__autoGenCov:
             raise Exception('Both covMatrix and autoGenCov were provided. Use Only one.')
-        elif autoGenCov:
+        elif self.__autoGenCov:
             self.generateCovMatricesFromErrors()
         else:
             self.covMatrices = covMatrix
@@ -56,13 +57,13 @@ class MultiDataset(object):
     def generateCovMatricesFromErrors(self):
         for dataset in self.datasets:
             if dataset.error is None:
-                raise Exception('One or more datasets have no errors specified.')
+                raise Exception('One or more datasets have no errors specified. Assuming no correlation bewteen datapoints')
         
         covMatricesListShape = (self.shape[0], self.shape[1], self.shape[1]) #(n, p, p)
         self.covMatrices = _np.zeros(shape = covMatricesListShape)
         for i, m in enumerate(self.covMatrices):
             for j in range(covMatricesListShape[1]):
-                m[j][j] = self.datasets[j].error[i]
+                m[j][j] = self.datasets[j].error[i]**2 
 
     def updateErrorsFromCovMatrices(self):
         if self.covMatrices is None:
@@ -71,7 +72,7 @@ class MultiDataset(object):
         for i, ds in enumerate(self.datasets):
             ds.error = _np.zeros(len(self))
             for j, m in enumerate(self.covMatrices):
-                ds.error[j] = m[i][i]
+                ds.error[j] = _np.sqrt(m[i][i])
 
 
 
@@ -81,6 +82,9 @@ class MultiDataset(object):
     @name.setter
     def name(self, value: str):
         self._name = value if value is not None else ''
+    @property
+    def autoGenCov(self) -> bool:
+        return self.__autoGenCov
 
 
 
@@ -162,8 +166,7 @@ class MultiDataset(object):
         if self.covMatrices is not None:
             self.covMatrices = self.covMatrices[indexList]
 
-    def indexAtDataset(self, datasetIndex, value: float, exact: bool = True) -> int:
-        return self.datasets[datasetIndex].indexAtValue(value, exact)
+    
 
     def dataFrame(self, rounded: bool=True, signifficantDigits=1, separatedErrors: _typing.Any=False, relativeErrors: _typing.Any=False, \
                 saveCSVFile: str=None, CSVSep: str=',', CSVDecimal: str='.'):

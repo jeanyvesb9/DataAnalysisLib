@@ -20,7 +20,7 @@ class Dataset(object):
         self.data = _gf._conv(data)
         
         if self.data.ndim != 1:
-            raise ValueError('Incorrect dimension of v.')
+            raise ValueError('Incorrect dimension of data.')
 
         if error is not None:
             if isinstance(error, _np.ndarray) or isinstance(error, list):
@@ -190,8 +190,8 @@ class Dataset(object):
 
     def __len__(self):
         return len(self.data)
-    
-    
+
+        
     def __add__(self, other):
         
         # safe checks
@@ -260,7 +260,7 @@ class Dataset(object):
             new_ds.data = self.data[index]
             new_ds.error = self.error[index] if self.error is not None else None
             
-            return new_ds
+            return new_ds.data
        
         if isinstance(index, list):
             # checking so we can make a slice out of this list
